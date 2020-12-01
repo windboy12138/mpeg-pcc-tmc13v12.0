@@ -36,6 +36,7 @@
 #ifndef PCCTMC3Common_h
 #define PCCTMC3Common_h
 
+#define Adaptive_Quant_for_point 1
 #include "PCCMath.h"
 #include "PCCPointSet.h"
 #include "constants.h"
@@ -1816,6 +1817,36 @@ buildPredictorsFast(
     numberOfPointsPerLevelOfDetail.begin(),
     numberOfPointsPerLevelOfDetail.end());
 }
+
+//---------------------------------------------------------------------------
+
+#if Adaptive_Quant_for_point
+inline void
+ComputePointQuantizationWeights(
+  const std::vector<PCCPredictor>& predictors,
+  std::vector<int64_t>& quantizationWeights,
+  Vec3<int32_t> weightOfNearestNeighbors)
+{
+  const size_t pointCount = predictors.size();
+  quantizationWeights.resize(pointCount);
+  for (size_t i = 0; i < pointCount; ++i) {
+    quantizationWeights[i] = (1 << kFixedPointWeightShift);
+  }
+  for (size_t i = 0; i < pointCount; ++i) {
+    const size_t predictorIndex = pointCount - i - 1;
+    const auto& predictor = predictors[predictorIndex];
+    const auto currentQuantWeight = quantizationWeights[predictorIndex];
+    for (size_t j = 0; j < predictor.neighborCount; ++j) {
+      const size_t neighborPredIndex = predictor.neighbors[j].predictorIndex;
+      auto& neighborQuantWeight = quantizationWeights[neighborPredIndex];
+      //int64_t weight = 16 << (2 - j);
+      auto weight = weightOfNearestNeighbors[j];
+      neighborQuantWeight += divExp2RoundHalfInf(
+        weight * currentQuantWeight, kFixedPointWeightShift);
+    }
+  }
+}
+#endif
 
 //---------------------------------------------------------------------------
 

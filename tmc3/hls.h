@@ -36,7 +36,7 @@
 #pragma once
 
 #include "PCCMath.h"
-
+#define Enable_user_define_weight_of_nearest_neighbor 1
 #include <cstdint>
 #include <ostream>
 #include <vector>
@@ -601,7 +601,9 @@ struct AttributeParameterSet {
   int adaptive_prediction_threshold;
   int intra_lod_search_range;
   int inter_lod_search_range;
-
+#if Enable_user_define_weight_of_nearest_neighbor
+  Vec3<int32_t> weightOfNearestNeighborsInAdaptiveQuant;
+#endif
   int adaptivePredictionThreshold(const AttributeDescription& desc) const
   {
     return adaptive_prediction_threshold << std::max(0, desc.bitdepth - 8);

@@ -816,6 +816,11 @@ write(const SequenceParameterSet& sps, const AttributeParameterSet& aps)
 
   bs.writeUe(aps.init_qp_minus4);
   bs.writeSe(aps.aps_chroma_qp_offset);
+#if Enable_user_define_weight_of_nearest_neighbor
+  bs.writeUe(aps.weightOfNearestNeighborsInAdaptiveQuant[0]);
+  bs.writeUe(aps.weightOfNearestNeighborsInAdaptiveQuant[1]);
+  bs.writeUe(aps.weightOfNearestNeighborsInAdaptiveQuant[2]);
+#endif
   bs.write(aps.aps_slice_qp_deltas_present_flag);
 
   if (aps.lodParametersPresent()) {
@@ -906,6 +911,11 @@ parseAps(const PayloadBuffer& buf)
 
   bs.readUe(&aps.init_qp_minus4);
   bs.readSe(&aps.aps_chroma_qp_offset);
+#if Enable_user_define_weight_of_nearest_neighbor
+  bs.readUe(&aps.weightOfNearestNeighborsInAdaptiveQuant[0]);
+  bs.readUe(&aps.weightOfNearestNeighborsInAdaptiveQuant[1]);
+  bs.readUe(&aps.weightOfNearestNeighborsInAdaptiveQuant[2]);
+#endif
   bs.read(&aps.aps_slice_qp_deltas_present_flag);
 
   aps.aps_slice_dist2_deltas_present_flag = false;
