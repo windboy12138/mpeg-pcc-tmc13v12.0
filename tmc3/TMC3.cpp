@@ -362,6 +362,7 @@ operator<<(std::ostream& out, const PartitionMethod& val)
   case PartitionMethod::kUniformGeom: out << "2 (UniformGeom)"; break;
   case PartitionMethod::kOctreeUniform: out << "3 (UniformOctree)"; break;
   case PartitionMethod::kUniformSquare: out << "4 (UniformSquare)"; break;
+  case PartitionMethod::kNpoints: out << "5 (NPointSpans)"; break;
   default: out << int(val) << " (Unknown)"; break;
   }
   return out;
@@ -592,10 +593,10 @@ ParseParameters(int argc, char* argv[], Parameters& params)
     params.encoder.partition.method, PartitionMethod::kUniformSquare,
     "Method used to partition input point cloud into slices/tiles:\n"
     "  0: none\n"
-    "  1: none (deprecated)\n"
-    "  2: n Uniform-Geometry partition bins along the longest edge\n"
-    "  3: Uniform Geometry partition at n octree depth\n"
-    "  4: Uniform Square partition")
+    "  2: n Uniform-geometry partition bins along the longest edge\n"
+    "  3: Uniform geometry partition at n octree depth\n"
+    "  4: Uniform square partition\n"
+    "  5: n-point spans of input")
 
   ("partitionOctreeDepth",
     params.encoder.partition.octreeDepth, 1,
@@ -1127,8 +1128,19 @@ sanitizeEncoderOpts(
     params.encoder.gps.geom_qp_offset_intvl_log2;
 
   // If idcm rate is configured as 0, disable idcm
-  if (params.encoder.gps.geom_idcm_rate_minus1 < 0)
-    params.encoder.gps.inferred_direct_coding_mode = 0;
+  // NB: if user has requested less contrained idcm, warn
+  if (params.encoder.gps.geom_idcm_rate_minus1 < 0) {
+    if (params.encoder.gps.inferred_direct_coding_mode == 1)
+      params.encoder.gps.inferred_direct_coding_mode = 0;
+  }
+
+  if (params.encoder.gps.geom_idcm_rate_minus1 < 31) {
+    if (params.encoder.gps.inferred_direct_coding_mode > 1) {
+      params.encoder.gps.geom_idcm_rate_minus1 = 31;
+      err.warn() << "ignoring planarModeIdcmUse < 32: "
+        "contradicts inferredDirectCodingMode > 1\n";
+    }
+  }
 
   // convert coordinate systems if the coding order is different from xyz
   convertXyzToStv(&params.encoder.sps);
