@@ -43,6 +43,13 @@
 #include "quantization.h"
 #include "RAHT.h"
 #include "FixedPoint.h"
+#if Use_position_centroid_Diff
+int thresholdLength;
+#endif
+static int pointUseRdoCount = 0;
+static int pointUseRdoNotZeroCount = 0;
+static int pointUseRdoCountRefl = 0;
+static int pointUseRdoNotZeroCountRefl = 0;
 
 #include <algorithm>
 
@@ -476,6 +483,20 @@ AttributeEncoder::encode(
 
   QpSet qpSet = deriveQpSet(desc, attr_aps, abh);
 
+#if Use_position_centroid_Diff
+  thresholdLength = std::min(
+    sps.seqBoundingBoxSize[0],
+    std::min(sps.seqBoundingBoxSize[1], sps.seqBoundingBoxSize[2]));
+  std::cout << "The minimum Length of Sequence boundingBox is:\t"
+            << thresholdLength << std::endl;
+  thresholdLength /= 64;
+  std::cout << "The 1/64 minimum Length of Sequence boundingBox is:\t"
+            << thresholdLength << std::endl;
+  auto effectiveQp = qpSet.layers[0][0] - 4;
+  int thresholdShift = ceil(effectiveQp / 6.0);
+  thresholdLength = thresholdLength << thresholdShift;
+  std::cout << "the effective threshold is:  " << thresholdLength << std::endl;
+#endif
   // generate LoDs if necessary
   if (attr_aps.lodParametersPresent() && _lods.empty())
     _lods.generate(
@@ -602,6 +623,10 @@ AttributeEncoder::decidePredModeRefl(
       // with reconstruction.
     }
   }
+  //wxh add only for local test
+  ++pointUseRdoCountRefl;
+  if (predictor.predMode != 0)
+    ++pointUseRdoNotZeroCountRefl;
 }
 
 //----------------------------------------------------------------------------
@@ -660,9 +685,13 @@ AttributeEncoder::encodeReflectancesPred(
     const uint32_t pointIndex = _lods.indexes[predictorIndex];
     auto quant = qpSet.quantizers(pointCloud[pointIndex], quantLayer);
     auto& predictor = _lods.predictors[predictorIndex];
-
+#if Use_position_centroid_Diff
+    bool predModeEligible = predModeEligibleRefl(
+      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength, predictor);
+#else
     bool predModeEligible =
       predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictor);
+#endif
     if (predModeEligible)
       decidePredModeRefl(
         desc, aps, pointCloud, _lods.indexes, predictorIndex, predictor,
@@ -700,6 +729,14 @@ AttributeEncoder::encodeReflectancesPred(
   if (zeroRunAcc)
     zerorun.push_back(zeroRunAcc);
 
+#if Use_position_centroid_Diff
+  std::cout << '\n'<< "********************************************************"<< std::endl;
+  std::cout << "Refl:  Total point use rdo:  " << pointUseRdoCountRefl << '\n'
+            << "Refl:  Total point not average predMode:  " << pointUseRdoNotZeroCountRefl<< '\n'
+            << "Refl:  the nonzero percent:  "<< (double(pointUseRdoNotZeroCountRefl) / double(pointUseRdoCountRefl))* 100 << '%'
+            << std::endl;  //wxh add for test
+  std::cout << "********************************************************"<< '\n'<< std::endl;
+#endif
   int runIdx = 0;
   int zeroRunRem = 0;
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
@@ -805,6 +842,10 @@ AttributeEncoder::decidePredModeColor(
       // with reconstruction.
     }
   }
+  //wxh add only for local test
+  ++pointUseRdoCount;
+  if (predictor.predMode != 0)
+    ++pointUseRdoNotZeroCount;
 }
 
 //----------------------------------------------------------------------------
@@ -972,9 +1013,13 @@ AttributeEncoder::encodeColorsPred(
     const auto pointIndex = _lods.indexes[predictorIndex];
     auto quant = qpSet.quantizers(pointCloud[pointIndex], quantLayer);
     auto& predictor = _lods.predictors[predictorIndex];
-
+#if Use_position_centroid_Diff
+    bool predModeEligible = predModeEligibleColor(
+      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength, predictor);
+#else
     bool predModeEligible =
       predModeEligibleColor(desc, aps, pointCloud, _lods.indexes, predictor);
+#endif
     if (predModeEligible)
       decidePredModeColor(
         desc, aps, pointCloud, _lods.indexes, predictorIndex, predictor,
@@ -1029,7 +1074,14 @@ AttributeEncoder::encodeColorsPred(
   }
   if (zeroRunAcc)
     zerorun.push_back(zeroRunAcc);
-
+#if Use_position_centroid_Diff
+  std::cout << '\n'<< "********************************************************"<< std::endl;
+  std::cout << "Total point use rdo:  " << pointUseRdoCount << '\n'
+            << "Total point not average predMode:  " << pointUseRdoNotZeroCount<< '\n'
+            << "the nonzero percent:  "<< (double(pointUseRdoNotZeroCount) / double(pointUseRdoCount))* 100 << '%'
+            << std::endl;
+  std::cout << "********************************************************"<< '\n'<< std::endl;
+#endif
   int runIdx = 0;
   int zeroRunRem = 0;
   for (size_t predictorIndex = 0; predictorIndex < pointCount;

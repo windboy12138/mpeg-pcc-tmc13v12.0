@@ -103,6 +103,10 @@ bool predModeEligibleColor(
   const AttributeParameterSet& aps,
   const PCCPointSet3& pointCloud,
   const std::vector<uint32_t>& indexes,
+#if Use_position_centroid_Diff
+  const uint32_t predictorIndex,
+  const int thresholdLength,
+#endif
   const PCCPredictor& predictor);
 
 bool predModeEligibleRefl(
@@ -110,6 +114,10 @@ bool predModeEligibleRefl(
   const AttributeParameterSet& aps,
   const PCCPointSet3& pointCloud,
   const std::vector<uint32_t>& indexes,
+#if Use_position_centroid_Diff
+  const uint32_t predictorIndex,
+  const int thresholdLength,
+#endif
   const PCCPredictor& predictor);
 
 //============================================================================

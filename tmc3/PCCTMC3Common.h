@@ -36,6 +36,7 @@
 #ifndef PCCTMC3Common_h
 #define PCCTMC3Common_h
 
+#define Use_position_centroid_Diff 1
 #include "PCCMath.h"
 #include "PCCPointSet.h"
 #include "constants.h"

@@ -43,6 +43,9 @@
 #include "io_hls.h"
 #include "RAHT.h"
 #include "FixedPoint.h"
+#if Use_position_centroid_Diff
+int thresholdLengthDecoder;
+#endif
 
 namespace pcc {
 
@@ -202,6 +205,19 @@ AttributeDecoder::decode(
 {
   QpSet qpSet = deriveQpSet(attr_desc, attr_aps, abh);
 
+  #if Use_position_centroid_Diff
+  thresholdLengthDecoder = std::min(
+    sps.seqBoundingBoxSize[0],
+    std::min(sps.seqBoundingBoxSize[1], sps.seqBoundingBoxSize[2]));
+  std::cout << "The minimum Length of Sequence boundingBox is:\t"
+            << thresholdLengthDecoder << std::endl;
+  thresholdLengthDecoder /= 64;
+  auto effectiveQp = qpSet.layers[0][0] - 4;
+  int thresholdShift = ceil(effectiveQp / 6.0);
+  thresholdLengthDecoder = thresholdLengthDecoder << thresholdShift;
+  std::cout << "the effective threshold is:  " << thresholdLengthDecoder
+            << std::endl;
+#endif
   PCCResidualsDecoder decoder(abh, ctxtMem);
   decoder.start(sps, payload, payloadLen);
 
@@ -335,7 +351,11 @@ AttributeDecoder::decodeReflectancesPred(
     if (!zeroRunRem)
       attValue0 = decoder.decode();
 
+#if Use_position_centroid_Diff
+    if (predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLengthDecoder, predictor))
+#else
     if (predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictor))
+#endif
       decodePredModeRefl(aps, attValue0, predictor);
 
     attr_t& reflectance = pointCloud.getReflectance(pointIndex);
@@ -437,8 +457,12 @@ AttributeDecoder::decodeColorsPred(
       values[0] = values[1] = values[2] = 0;
     else
       decoder.decode(&values[0]);
-
+#if Use_position_centroid_Diff
+    if (predModeEligibleColor(
+          desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLengthDecoder, predictor))
+#else
     if (predModeEligibleColor(desc, aps, pointCloud, _lods.indexes, predictor))
+#endif
       decodePredModeColor(aps, values, predictor);
 
     Vec3<attr_t>& color = pointCloud.getColor(pointIndex);

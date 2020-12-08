@@ -282,6 +282,13 @@ public:
     assert(index < colors.size() && withColors);
     return colors[index];
   }
+  //-------------------- add function to get point position
+  Vec3<int32_t> getPosition(const size_t index) const
+  {
+    assert(index < positions.size());
+    return positions[index];
+  }
+  //---------------------
   void setColor(const size_t index, const Vec3<attr_t> color)
   {
     assert(index < colors.size() && withColors);

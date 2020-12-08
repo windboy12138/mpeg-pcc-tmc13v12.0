@@ -141,11 +141,36 @@ predModeEligibleColor(
   const AttributeParameterSet& aps,
   const PCCPointSet3& pointCloud,
   const std::vector<uint32_t>& indexes,
+#if Use_position_centroid_Diff
+  const uint32_t predictorIndex,
+  const int thresholdLength,
+#endif
   const PCCPredictor& predictor)
 {
   if (predictor.neighborCount <= 1 || !aps.max_num_direct_predictors)
     return false;
-
+#if Use_position_centroid_Diff
+  int64_t sumDistance = 0;
+  if (predictor.neighborCount > 2 && aps.max_num_direct_predictors) {
+    auto position = pointCloud.getPosition(indexes[predictorIndex]);
+    auto position1 =
+      pointCloud.getPosition(indexes[predictor.neighbors[0].predictorIndex]);
+    auto position2 =
+      pointCloud.getPosition(indexes[predictor.neighbors[1].predictorIndex]);
+    auto position3 =
+      pointCloud.getPosition(indexes[predictor.neighbors[2].predictorIndex]);
+    Vec3<int32_t> neighborCentroid;
+    for (int i = 0; i < 3; ++i) {
+      neighborCentroid[i] = (position1[i] + position2[i] + position3[i]) / 3;
+    }
+    for (int i = 0; i < 3; ++i) {
+      sumDistance += (position[i] - neighborCentroid[i])
+        * (position[i] - neighborCentroid[i]);
+    }
+  }
+  int64_t maxDiff = std::sqrt(sumDistance);
+  return maxDiff >= thresholdLength;
+#else
   Vec3<int64_t> minValue = {0, 0, 0};
   Vec3<int64_t> maxValue = {0, 0, 0};
   for (int i = 0; i < predictor.neighborCount; ++i) {
@@ -163,6 +188,7 @@ predModeEligibleColor(
 
   auto maxDiff = (maxValue - minValue).max();
   return maxDiff >= aps.adaptivePredictionThreshold(desc);
+#endif
 }
 
 //----------------------------------------------------------------------------
@@ -173,11 +199,36 @@ predModeEligibleRefl(
   const AttributeParameterSet& aps,
   const PCCPointSet3& pointCloud,
   const std::vector<uint32_t>& indexes,
+#if Use_position_centroid_Diff
+  const uint32_t predictorIndex,
+  const int thresholdLength,
+#endif
   const PCCPredictor& predictor)
 {
   if (predictor.neighborCount <= 1 || !aps.max_num_direct_predictors)
     return false;
-
+#if Use_position_centroid_Diff
+  int64_t sumDistance = 0;
+  if (predictor.neighborCount > 2 && aps.max_num_direct_predictors) {
+    auto position = pointCloud.getPosition(indexes[predictorIndex]);
+    auto position1 =
+      pointCloud.getPosition(indexes[predictor.neighbors[0].predictorIndex]);
+    auto position2 =
+      pointCloud.getPosition(indexes[predictor.neighbors[1].predictorIndex]);
+    auto position3 =
+      pointCloud.getPosition(indexes[predictor.neighbors[2].predictorIndex]);
+    Vec3<int32_t> neighborCentroid;
+    for (int i = 0; i < 3; ++i) {
+      neighborCentroid[i] = (position1[i] + position2[i] + position3[i]) / 3;
+    }
+    for (int i = 0; i < 3; ++i) {
+      sumDistance += (position[i] - neighborCentroid[i])
+        * (position[i] - neighborCentroid[i]);
+    }
+  }
+  int64_t maxDiff = std::sqrt(sumDistance);
+  return maxDiff >= thresholdLength;
+#else
   int64_t minValue = 0;
   int64_t maxValue = 0;
   for (int i = 0; i < predictor.neighborCount; ++i) {
@@ -193,6 +244,7 @@ predModeEligibleRefl(
 
   auto maxDiff = maxValue - minValue;
   return maxDiff >= aps.adaptivePredictionThreshold(desc);
+#endif
 }
 
 //============================================================================
