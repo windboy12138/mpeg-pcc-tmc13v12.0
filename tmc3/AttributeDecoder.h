@@ -128,6 +128,11 @@ protected:
     Vec3<int32_t>& coeff,
     PCCPredictor& predictor);
 
+  void decodePredModeColorLift(
+    const AttributeParameterSet& aps,
+    int32_t coeff[3],
+    PCCPredictor& predictor);
+
   static void decodePredModeRefl(
     const AttributeParameterSet& aps, int32_t& coeff, PCCPredictor& predictor);
 

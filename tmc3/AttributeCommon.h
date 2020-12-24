@@ -120,6 +120,14 @@ bool predModeEligibleRefl(
 #endif
   const PCCPredictor& predictor);
 
+void
+PCCLiftPredictRDOinverse(
+  std::vector<PCCPredictor>& predictors,
+  const size_t startIndex,
+  const size_t endIndex,
+  const bool direct,
+  std::vector<Vec3<int64_t>>& attributes);
+
 //============================================================================
 
 }  // namespace pcc

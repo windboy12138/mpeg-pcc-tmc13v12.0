@@ -36,6 +36,10 @@
 #include "AttributeCommon.h"
 
 #include "PCCTMC3Common.h"
+#include "quantization.h"
+#include "ArithmeticCodec.h"
+#include "entropy.h"
+#include "DualLutCoder.h"
 
 namespace pcc {
 
@@ -247,6 +251,43 @@ predModeEligibleRefl(
 #endif
 }
 
+
+//----------------------------------------------------------------------------
+
+void
+PCCLiftPredictRDOinverse(
+  std::vector<PCCPredictor>& predictors,
+  const size_t startIndex,
+  const size_t endIndex,
+  const bool direct,
+  std::vector<Vec3<int64_t>>& attributes)
+{
+  const size_t predictorCount = endIndex - startIndex;
+  for (size_t index = 0; index < predictorCount; ++index) {
+    const size_t predictorIndex = predictorCount - index - 1 + startIndex;
+    PCCPredictor& predictor = predictors[predictorIndex];
+    auto& attribute = attributes[predictorIndex];
+    Vec3<int64_t> predicted = 0;
+    for (size_t i = 0; i < predictor.neighborCount; ++i) {
+      const size_t neighborPredIndex = predictor.neighbors[i].predictorIndex;
+      const uint32_t weight = predictor.neighbors[i].weight;
+      assert(neighborPredIndex < startIndex);
+      predicted += weight * attributes[neighborPredIndex];
+    }
+    predicted = divExp2RoundHalfInf(predicted, kFixedPointWeightShift);
+    if (predictor.predMode != 0) {
+      int8_t predMode = predictor.predMode - 1;
+      predicted = attributes[predictor.neighbors[predMode].predictorIndex];
+    }
+    /*std::cout << "the residual value:\t" << attribute;*/
+    if (direct) {
+      attribute -= predicted;
+    } else {
+      attribute += predicted;
+    }
+    /*std::cout << "\t the reconstructed value:\t" << attribute << std::endl;*/
+  }
+}
 //============================================================================
 
 }  // namespace pcc

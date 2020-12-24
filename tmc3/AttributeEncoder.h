@@ -122,6 +122,13 @@ protected:
     const Vec3<int8_t> icpCoeff,
     const Quantizers& quant);
 
+  Vec3<int64_t> computeColorResidualsLift(
+    const AttributeParameterSet& aps,
+    const Vec3<attr_t> color,
+    const Vec3<attr_t> predictedColor,
+    uint64_t weight,
+    const Quantizers& quant);
+
   static int computeColorDistortions(
     const AttributeDescription& desc,
     const Vec3<attr_t> color,
@@ -139,6 +146,56 @@ protected:
     PCCResidualsEntropyEstimator& context,
     const Vec3<int8_t>& icpCoeff,
     const Quantizers& quant);
+
+  void decidePredModeColorLift(
+    const AttributeDescription& desc,
+    const AttributeParameterSet& aps,
+    std::vector<Vec3<int64_t>>& attributes,
+    Vec3<int64_t>& predicted,
+    const uint32_t predictorIndex,
+    PCCPredictor& predictor,
+    PCCResidualsEncoder& encoder,
+    PCCResidualsEntropyEstimator& context,
+    uint64_t quantWeight,
+    const Quantizers& quantD,
+    const Quantizers& quantR);
+
+  void PCCLiftPredictRDO(
+    const AttributeDescription& desc,
+    const AttributeParameterSet& aps,
+    const PCCPointSet3& pointCloud,
+    const std::vector<uint32_t>& indexes,
+    const int thresholdLength,
+    PCCResidualsEncoder& encoder,
+    PCCResidualsEntropyEstimator& context,
+    const Quantizers& quantD,
+    const Quantizers& quantR,
+    std::vector<uint64_t> weights,
+    std::vector<PCCPredictor>& predictors,
+    const size_t startIndex,
+    const size_t endIndex,
+    const bool direct,
+    std::vector<Vec3<int64_t>>& attributes);
+
+  //void PCCLiftPredictRDOinverse(
+  //  const AttributeDescription& desc,
+  //  const AttributeParameterSet& aps,
+  //  const PCCPointSet3& pointCloud,
+  //  const std::vector<uint32_t>& indexes,
+  //  const int thresholdLength,
+  //  PCCResidualsEncoder& encoder,
+  //  PCCResidualsEntropyEstimator& context,
+  //  const Quantizers& quant,
+  //  std::vector<PCCPredictor>& predictors,
+  //  const size_t startIndex,
+  //  const size_t endIndex,
+  //  const bool direct,
+  //  std::vector<Vec3<int64_t>>& attributes);
+
+  void decodePredModeColor(
+    const AttributeParameterSet& aps,
+    Vec3<int64_t>& coeff,
+    PCCPredictor& predictor);
 
   static void encodePredModeColor(
     const AttributeParameterSet& aps, int predMode, Vec3<int32_t>& coeff);

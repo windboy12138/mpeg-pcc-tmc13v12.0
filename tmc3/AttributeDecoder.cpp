@@ -205,14 +205,14 @@ AttributeDecoder::decode(
 {
   QpSet qpSet = deriveQpSet(attr_desc, attr_aps, abh);
 
-  #if Use_position_centroid_Diff
+#if Use_position_centroid_Diff
   thresholdLengthDecoder = std::min(
     sps.seqBoundingBoxSize[0],
     std::min(sps.seqBoundingBoxSize[1], sps.seqBoundingBoxSize[2]));
   std::cout << "The minimum Length of Sequence boundingBox is:\t"
             << thresholdLengthDecoder << std::endl;
   thresholdLengthDecoder /= 64;
-  auto effectiveQp = qpSet.layers[0][0] - 4;
+  auto effectiveQp = qpSet.layers[0][0] - 16;
   int thresholdShift = ceil(effectiveQp / 6.0);
   thresholdLengthDecoder = thresholdLengthDecoder << thresholdShift;
   std::cout << "the effective threshold is:  " << thresholdLengthDecoder
@@ -352,7 +352,9 @@ AttributeDecoder::decodeReflectancesPred(
       attValue0 = decoder.decode();
 
 #if Use_position_centroid_Diff
-    if (predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLengthDecoder, predictor))
+    if (predModeEligibleRefl(
+          desc, aps, pointCloud, _lods.indexes, predictorIndex,
+          thresholdLengthDecoder, predictor))
 #else
     if (predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictor))
 #endif
@@ -422,6 +424,58 @@ AttributeDecoder::decodePredModeColor(
 //----------------------------------------------------------------------------
 
 void
+AttributeDecoder::decodePredModeColorLift(
+  const AttributeParameterSet& aps,
+  int32_t coeff[3],
+  PCCPredictor& predictor)
+{
+  int signk1 = coeff[1] < 0 ? -1 : 1;
+  int signk2 = coeff[2] < 0 ? -1 : 1;
+  int coeffAbsk1 = abs(coeff[1]);
+  int coeffAbsk2 = abs(coeff[2]);
+
+  int mode;
+  //int maxcand =
+  //  aps.max_num_direct_predictors + !aps.direct_avg_predictor_disabled_flag;
+  int maxcand = 4;
+  switch (maxcand) {
+    int parityk1, parityk2;
+  case 4:
+    parityk1 = coeffAbsk1 & 1;
+    parityk2 = coeffAbsk2 & 1;
+    coeff[1] = signk1 * (coeffAbsk1 >> 1);
+    coeff[2] = signk2 * (coeffAbsk2 >> 1);
+
+    mode = (parityk1 << 1) + parityk2;
+    break;
+
+  case 3:
+    parityk1 = coeffAbsk1 & 1;
+    coeff[1] = signk1 * (coeffAbsk1 >> 1);
+    mode = parityk1;
+    if (parityk1) {
+      parityk2 = coeffAbsk2 & 1;
+      coeff[2] = signk2 * (coeffAbsk2 >> 1);
+      mode += parityk2;
+    }
+    break;
+
+  case 2:
+    parityk1 = coeffAbsk1 & 1;
+    coeff[1] = signk1 * (coeffAbsk1 >> 1);
+    mode = parityk1;
+    break;
+
+  default: assert(maxcand >= 2); mode = 0;
+  }
+
+  //predictor.predMode = mode + aps.direct_avg_predictor_disabled_flag;
+  predictor.predMode = mode + 0;
+}
+
+//----------------------------------------------------------------------------
+
+void
 AttributeDecoder::decodeColorsPred(
   const AttributeDescription& desc,
   const AttributeParameterSet& aps,
@@ -459,7 +513,8 @@ AttributeDecoder::decodeColorsPred(
       decoder.decode(&values[0]);
 #if Use_position_centroid_Diff
     if (predModeEligibleColor(
-          desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLengthDecoder, predictor))
+          desc, aps, pointCloud, _lods.indexes, predictorIndex,
+          thresholdLengthDecoder, predictor))
 #else
     if (predModeEligibleColor(desc, aps, pointCloud, _lods.indexes, predictor))
 #endif
@@ -670,8 +725,19 @@ AttributeDecoder::decodeColorsLift(
       zeroRunRem = decoder.decodeRunLength();
 
     int32_t values[3] = {};
+    /*Vec3<int32_t> values;*/
     if (!zeroRunRem)
       decoder.decode(values);
+    bool predModeEligible = predModeEligibleColor(
+      desc, aps, pointCloud, _lods.indexes, predictorIndex,
+      thresholdLengthDecoder, _lods.predictors[predictorIndex]);
+    if (predModeEligible) {
+      decodePredModeColorLift(aps, values, _lods.predictors[predictorIndex]);
+      auto predictor = _lods.predictors[predictorIndex];
+      int32_t predMode = predictor.predMode;
+      //std::cout << "the predictorIndex:\t" << predictorIndex
+      //          << "\t the predMode:\t" << predMode << std::endl;
+    }
 
     const int64_t iQuantWeight = irsqrt(weights[predictorIndex]);
     auto& color = colors[predictorIndex];
@@ -687,6 +753,11 @@ AttributeDecoder::decodeColorsLift(
 
     scaled += quant[1].scale(values[2]);
     color[2] = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
+
+	//if (predictorIndex >= 0) {
+ //     std::cout << "the predictorIndex:\t" << predictorIndex
+ //               << "\t the color value:\t" << color << std::endl;
+ //   }
   }
 
   // reconstruct
@@ -695,7 +766,8 @@ AttributeDecoder::decodeColorsLift(
     const size_t endIndex = _lods.numPointsInLod[lodIndex];
     PCCLiftUpdate(
       _lods.predictors, weights, startIndex, endIndex, false, colors);
-    PCCLiftPredict(_lods.predictors, startIndex, endIndex, false, colors);
+    /*PCCLiftPredict(_lods.predictors, startIndex, endIndex, false, colors);*/
+    PCCLiftPredictRDOinverse(_lods.predictors, startIndex, endIndex, false, colors);
   }
 
   int64_t clipMax = (1 << desc.bitdepth) - 1;
@@ -706,6 +778,8 @@ AttributeDecoder::decodeColorsLift(
     for (size_t d = 0; d < 3; ++d) {
       color[d] = attr_t(PCCClip(color0[d], int64_t(0), clipMax));
     }
+    //std::cout << "the predictorIndex:\t" << _lods.indexes[f]
+    //               << "\t the color value:\t" << color << std::endl;
     pointCloud.setColor(_lods.indexes[f], color);
   }
 }

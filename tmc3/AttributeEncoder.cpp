@@ -55,7 +55,7 @@ static int pointUseRdoNotZeroCountRefl = 0;
 
 // todo(df): promote to per-attribute encoder parameter
 static const double kAttrPredLambdaR = 0.01;
-static const double kAttrPredLambdaC = 0.14;
+static const double kAttrPredLambdaC = 0.30; // only for lift
 
 namespace pcc {
 //============================================================================
@@ -492,7 +492,7 @@ AttributeEncoder::encode(
   thresholdLength /= 64;
   std::cout << "The 1/64 minimum Length of Sequence boundingBox is:\t"
             << thresholdLength << std::endl;
-  auto effectiveQp = qpSet.layers[0][0] - 4;
+  auto effectiveQp = qpSet.layers[0][0] - 16;
   int thresholdShift = ceil(effectiveQp / 6.0);
   thresholdLength = thresholdLength << thresholdShift;
   std::cout << "the effective threshold is:  " << thresholdLength << std::endl;
@@ -687,7 +687,8 @@ AttributeEncoder::encodeReflectancesPred(
     auto& predictor = _lods.predictors[predictorIndex];
 #if Use_position_centroid_Diff
     bool predModeEligible = predModeEligibleRefl(
-      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength, predictor);
+      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength,
+      predictor);
 #else
     bool predModeEligible =
       predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictor);
@@ -730,12 +731,20 @@ AttributeEncoder::encodeReflectancesPred(
     zerorun.push_back(zeroRunAcc);
 
 #if Use_position_centroid_Diff
-  std::cout << '\n'<< "********************************************************"<< std::endl;
+  std::cout << '\n'
+            << "********************************************************"
+            << std::endl;
   std::cout << "Refl:  Total point use rdo:  " << pointUseRdoCountRefl << '\n'
-            << "Refl:  Total point not average predMode:  " << pointUseRdoNotZeroCountRefl<< '\n'
-            << "Refl:  the nonzero percent:  "<< (double(pointUseRdoNotZeroCountRefl) / double(pointUseRdoCountRefl))* 100 << '%'
+            << "Refl:  Total point not average predMode:  "
+            << pointUseRdoNotZeroCountRefl << '\n'
+            << "Refl:  the nonzero percent:  "
+            << (double(pointUseRdoNotZeroCountRefl)
+                / double(pointUseRdoCountRefl))
+      * 100 << '%'
             << std::endl;  //wxh add for test
-  std::cout << "********************************************************"<< '\n'<< std::endl;
+  std::cout << "********************************************************"
+            << '\n'
+            << std::endl;
 #endif
   int runIdx = 0;
   int zeroRunRem = 0;
@@ -790,6 +799,28 @@ AttributeEncoder::computeColorResiduals(
 
 //----------------------------------------------------------------------------
 
+Vec3<int64_t>
+AttributeEncoder::computeColorResidualsLift(
+  const AttributeParameterSet& aps,
+  const Vec3<attr_t> color,
+  const Vec3<attr_t> predictedColor,
+  uint64_t weight,
+  const Quantizers& quant)
+{
+  Vec3<int64_t> residuals;
+  const int64_t iQuantWeight = irsqrt(weight);
+  const int64_t quantWeight = (weight * iQuantWeight + (1ull << 39)) >> 40;
+  for (size_t k = 0; k < 3; ++k) {
+    const int64_t quantAttValue = color[k];
+    const int64_t quantPredAttValue = predictedColor[k];
+    residuals[k] =
+      quant[0].quantize((quantAttValue - quantPredAttValue) * quantWeight);
+  }
+  return residuals;
+}
+
+//----------------------------------------------------------------------------
+
 void
 AttributeEncoder::decidePredModeColor(
   const AttributeDescription& desc,
@@ -834,6 +865,67 @@ AttributeEncoder::decidePredModeColor(
     double score = attrDistortion
       + rate * kAttrPredLambdaC
         * (quant[0].stepSize() >> kFixedPointAttributeShift);
+
+    if (score < best_score) {
+      best_score = score;
+      predictor.predMode = i + 1;
+      // NB: setting predictor.neighborCount = 1 will cause issues
+      // with reconstruction.
+    }
+  }
+  //wxh add only for local test
+  ++pointUseRdoCount;
+  if (predictor.predMode != 0)
+    ++pointUseRdoNotZeroCount;
+}
+
+//----------------------------------------------------------------------------
+
+void
+AttributeEncoder::decidePredModeColorLift(
+  const AttributeDescription& desc,
+  const AttributeParameterSet& aps,
+  std::vector<Vec3<int64_t>>& attributes,
+  Vec3<int64_t>& predicted,
+  const uint32_t predictorIndex,
+  PCCPredictor& predictor,
+  PCCResidualsEncoder& encoder,
+  PCCResidualsEntropyEstimator& context,
+  uint64_t quantWeight,
+  const Quantizers& quantD,
+  const Quantizers& quantR)
+{
+  Vec3<int64_t> attrValue = attributes[predictorIndex];
+
+  // base case: weighted average of n neighbours
+  int startpredIndex = aps.direct_avg_predictor_disabled_flag;
+  predictor.predMode = startpredIndex;
+  Vec3<int64_t> attrPred = predicted;
+  Vec3<int64_t> attrResidualQuant =
+    computeColorResidualsLift(aps, attrValue, attrPred, quantWeight, quantR);
+  auto attrDistortion =
+    computeColorDistortions(desc, attrValue >> 8U, attrPred >> 8U, quantD);
+
+  double rate = encoder.bitsPtColor(attrResidualQuant, 0);
+  double best_score = attrDistortion
+    + rate * kAttrPredLambdaC
+      * (quantD[0].stepSize() >> kFixedPointAttributeShift);
+
+  for (int i = startpredIndex; i < predictor.neighborCount; i++) {
+    if (i == aps.max_num_direct_predictors)
+      break;
+
+    attrPred = attributes[predictor.neighbors[i].predictorIndex];
+    attrResidualQuant =
+      computeColorResidualsLift(aps, attrValue, attrPred, quantWeight, quantR);
+    attrDistortion =
+      computeColorDistortions(desc, attrValue >> 8U, attrPred >> 8U, quantD);
+
+    int sigIdx = i + !aps.direct_avg_predictor_disabled_flag;
+    double rate = encoder.bitsPtColor(attrResidualQuant, sigIdx);
+    double score = attrDistortion
+      + rate * kAttrPredLambdaC
+        * (quantD[0].stepSize() >> kFixedPointAttributeShift);
 
     if (score < best_score) {
       best_score = score;
@@ -1015,7 +1107,8 @@ AttributeEncoder::encodeColorsPred(
     auto& predictor = _lods.predictors[predictorIndex];
 #if Use_position_centroid_Diff
     bool predModeEligible = predModeEligibleColor(
-      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength, predictor);
+      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength,
+      predictor);
 #else
     bool predModeEligible =
       predModeEligibleColor(desc, aps, pointCloud, _lods.indexes, predictor);
@@ -1075,12 +1168,19 @@ AttributeEncoder::encodeColorsPred(
   if (zeroRunAcc)
     zerorun.push_back(zeroRunAcc);
 #if Use_position_centroid_Diff
-  std::cout << '\n'<< "********************************************************"<< std::endl;
-  std::cout << "Total point use rdo:  " << pointUseRdoCount << '\n'
-            << "Total point not average predMode:  " << pointUseRdoNotZeroCount<< '\n'
-            << "the nonzero percent:  "<< (double(pointUseRdoNotZeroCount) / double(pointUseRdoCount))* 100 << '%'
+  std::cout << '\n'
+            << "********************************************************"
             << std::endl;
-  std::cout << "********************************************************"<< '\n'<< std::endl;
+  std::cout << "Total point use rdo:  " << pointUseRdoCount << '\n'
+            << "Total point not average predMode:  " << pointUseRdoNotZeroCount
+            << '\n'
+            << "the nonzero percent:  "
+            << (double(pointUseRdoNotZeroCount) / double(pointUseRdoCount))
+      * 100 << '%'
+            << std::endl;
+  std::cout << "********************************************************"
+            << '\n'
+            << std::endl;
 #endif
   int runIdx = 0;
   int zeroRunRem = 0;
@@ -1254,6 +1354,11 @@ AttributeEncoder::encodeColorsLift(
 {
   const size_t pointCount = pointCloud.getPointCount();
   std::vector<uint64_t> weights;
+  PCCResidualsEntropyEstimator context;
+  QpSet qpSet_temp = qpSet;
+  qpSet_temp.fixedPointQpOffset = 0;
+  auto quantD = qpSet_temp.quantizers(0, {0, 0});
+  auto quantR = qpSet.quantizers(0, {0, 0});
 
   if (!aps.scalable_lifting_enabled_flag) {
     PCCComputeQuantizationWeights(_lods.predictors, weights);
@@ -1277,7 +1382,11 @@ AttributeEncoder::encodeColorsLift(
     const size_t lodIndex = lodCount - i - 1;
     const size_t startIndex = _lods.numPointsInLod[lodIndex - 1];
     const size_t endIndex = _lods.numPointsInLod[lodIndex];
-    PCCLiftPredict(_lods.predictors, startIndex, endIndex, true, colors);
+    /*PCCLiftPredict(_lods.predictors, startIndex, endIndex, true, colors);*/
+    PCCLiftPredictRDO(
+      desc, aps, pointCloud, _lods.indexes, thresholdLength, encoder, context,
+      quantD, quantR, weights, _lods.predictors, startIndex, endIndex, true,
+      colors);
     PCCLiftUpdate(
       _lods.predictors, weights, startIndex, endIndex, true, colors);
   }
@@ -1305,6 +1414,7 @@ AttributeEncoder::encodeColorsLift(
     }
 
     const auto pointIndex = _lods.indexes[predictorIndex];
+    auto predictor = _lods.predictors[predictorIndex];  //
     auto quant = qpSet.quantizers(pointCloud[pointIndex], quantLayer);
 
     const int64_t iQuantWeight = irsqrt(weights[predictorIndex]);
@@ -1312,7 +1422,8 @@ AttributeEncoder::encodeColorsLift(
       (weights[predictorIndex] * iQuantWeight + (1ull << 39)) >> 40;
 
     auto& color = colors[predictorIndex];
-    int values[3];
+    //int values[3];
+    Vec3<int32_t> values;
     values[0] = quant[0].quantize(color[0] * quantWeight);
     int64_t scaled = quant[0].scale(values[0]);
     color[0] = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
@@ -1328,6 +1439,22 @@ AttributeEncoder::encodeColorsLift(
     values[2] = quant[1].quantize(color[2] * quantWeight);
     scaled += quant[1].scale(values[2]);
     color[2] = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
+
+    //if (predictorIndex >= 0) {
+    //  std::cout << "the predictorIndex:\t" << predictorIndex
+    //            << "\t the color value:\t" << color << std::endl;
+    //}
+    bool predModeEligible = predModeEligibleColor(
+      desc, aps, pointCloud, _lods.indexes, predictorIndex, thresholdLength,
+      _lods.predictors[predictorIndex]);
+    if (predictorIndex == 7)
+      int i = 0;
+    if (predModeEligible) {
+      encodePredModeColor(aps, predictor.predMode, values);
+      //std::cout << "the predictorIndex:\t" << predictorIndex
+      //          << "\t the predMode:\t" << int32_t(predictor.predMode) << std::endl;
+    }
+    
 
     if (!values[0] && !values[1] && !values[2])
       ++zeroRun;
@@ -1346,7 +1473,12 @@ AttributeEncoder::encodeColorsLift(
     const size_t endIndex = _lods.numPointsInLod[lodIndex];
     PCCLiftUpdate(
       _lods.predictors, weights, startIndex, endIndex, false, colors);
-    PCCLiftPredict(_lods.predictors, startIndex, endIndex, false, colors);
+    /*PCCLiftPredict(_lods.predictors, startIndex, endIndex, false, colors);*/
+    //PCCLiftPredictRDOinverse(
+    //  desc, aps, pointCloud, _lods.indexes, thresholdLength, encoder, context,
+    //  quantD, _lods.predictors, startIndex, endIndex, false, colors);
+    PCCLiftPredictRDOinverse(
+      _lods.predictors, startIndex, endIndex, false, colors);
   }
 
   int64_t clipMax = (1 << desc.bitdepth) - 1;
@@ -1357,6 +1489,8 @@ AttributeEncoder::encodeColorsLift(
     for (size_t d = 0; d < 3; ++d) {
       color[d] = attr_t(PCCClip(color0[d], 0, clipMax));
     }
+    //std::cout << "the predictorIndex:\t" << _lods.indexes[f]
+    //          << "\t the color value:\t" << color << std::endl;
     pointCloud.setColor(_lods.indexes[f], color);
   }
 }
@@ -1568,4 +1702,153 @@ estimateDist2(
 
 //============================================================================
 
+void
+AttributeEncoder::PCCLiftPredictRDO(
+  const AttributeDescription& desc,
+  const AttributeParameterSet& aps,
+  const PCCPointSet3& pointCloud,
+  const std::vector<uint32_t>& indexes,
+  const int thresholdLength,
+  PCCResidualsEncoder& encoder,
+  PCCResidualsEntropyEstimator& context,
+  const Quantizers& quantD,
+  const Quantizers& quantR,
+  std::vector<uint64_t> weights,
+  std::vector<PCCPredictor>& predictors,
+  const size_t startIndex,
+  const size_t endIndex,
+  const bool direct,
+  std::vector<Vec3<int64_t>>& attributes)
+{
+  const size_t predictorCount = endIndex - startIndex;
+  for (size_t index = 0; index < predictorCount; ++index) {
+    const size_t predictorIndex = predictorCount - index - 1 + startIndex;
+    PCCPredictor& predictor = predictors[predictorIndex];
+    auto& attribute = attributes[predictorIndex];
+    Vec3<int64_t> predicted = 0;
+    for (size_t i = 0; i < predictor.neighborCount; ++i) {
+      const size_t neighborPredIndex = predictor.neighbors[i].predictorIndex;
+      const uint32_t weight = predictor.neighbors[i].weight;
+      assert(neighborPredIndex < startIndex);
+      predicted += weight * attributes[neighborPredIndex];
+    }
+    predicted = divExp2RoundHalfInf(predicted, kFixedPointWeightShift);
+    bool predModeEligible = predModeEligibleColor(
+      desc, aps, pointCloud, indexes, predictorIndex, thresholdLength,
+      predictor);
+    uint64_t quantWeight = weights[predictorIndex];
+    if (predModeEligible) {
+      decidePredModeColorLift(
+        desc, aps, attributes, predicted, predictorIndex, predictor, encoder,
+        context, quantWeight, quantD, quantR);
+      int8_t predMode = predictor.predMode;
+      if (predMode != 0) {
+        predMode -= 1;
+        predicted = attributes[predictor.neighbors[predMode].predictorIndex];
+      }
+    }
+
+    if (direct) {
+      attribute -= predicted;
+    } else {
+      attribute += predicted;
+    }
+  }
+}
+
+//============================================================================
+
+//void
+//AttributeEncoder::PCCLiftPredictRDOinverse(
+//  const AttributeDescription& desc,
+//  const AttributeParameterSet& aps,
+//  const PCCPointSet3& pointCloud,
+//  const std::vector<uint32_t>& indexes,
+//  const int thresholdLength,
+//  PCCResidualsEncoder& encoder,
+//  PCCResidualsEntropyEstimator& context,
+//  const Quantizers& quant,
+//  std::vector<PCCPredictor>& predictors,
+//  const size_t startIndex,
+//  const size_t endIndex,
+//  const bool direct,
+//  std::vector<Vec3<int64_t>>& attributes)
+//{
+//  const size_t predictorCount = endIndex - startIndex;
+//  for (size_t index = 0; index < predictorCount; ++index) {
+//    const size_t predictorIndex = predictorCount - index - 1 + startIndex;
+//    PCCPredictor& predictor = predictors[predictorIndex];
+//    auto& attribute = attributes[predictorIndex];
+//    Vec3<int64_t> predicted = 0;
+//    for (size_t i = 0; i < predictor.neighborCount; ++i) {
+//      const size_t neighborPredIndex = predictor.neighbors[i].predictorIndex;
+//      const uint32_t weight = predictor.neighbors[i].weight;
+//      assert(neighborPredIndex < startIndex);
+//      predicted += weight * attributes[neighborPredIndex];
+//    }
+//    predicted = divExp2RoundHalfInf(predicted, kFixedPointWeightShift);
+//    if (predictor.predMode != 0) {
+//      int8_t predMode = predictor.predMode - 1;
+//      predicted = attributes[predictor.neighbors[predMode].predictorIndex];
+//    }
+//
+//    if (direct) {
+//      attribute -= predicted;
+//    } else {
+//      attribute += predicted;
+//    }
+//  }
+//}
+
+//============================================================================
+
+void
+AttributeEncoder::decodePredModeColor(
+  const AttributeParameterSet& aps,
+  Vec3<int64_t>& coeff,
+  PCCPredictor& predictor)
+{
+  int signk1 = coeff[1] < 0 ? -1 : 1;
+  int signk2 = coeff[2] < 0 ? -1 : 1;
+  int coeffAbsk1 = abs(coeff[1]);
+  int coeffAbsk2 = abs(coeff[2]);
+
+  int mode;
+  int maxcand =
+    aps.max_num_direct_predictors + !aps.direct_avg_predictor_disabled_flag;
+  switch (maxcand) {
+    int parityk1, parityk2;
+  case 4:
+    parityk1 = coeffAbsk1 & 1;
+    parityk2 = coeffAbsk2 & 1;
+    coeff[1] = signk1 * (coeffAbsk1 >> 1);
+    coeff[2] = signk2 * (coeffAbsk2 >> 1);
+
+    mode = (parityk1 << 1) + parityk2;
+    break;
+
+  case 3:
+    parityk1 = coeffAbsk1 & 1;
+    coeff[1] = signk1 * (coeffAbsk1 >> 1);
+    mode = parityk1;
+    if (parityk1) {
+      parityk2 = coeffAbsk2 & 1;
+      coeff[2] = signk2 * (coeffAbsk2 >> 1);
+      mode += parityk2;
+    }
+    break;
+
+  case 2:
+    parityk1 = coeffAbsk1 & 1;
+    coeff[1] = signk1 * (coeffAbsk1 >> 1);
+    mode = parityk1;
+    break;
+
+  default: assert(maxcand >= 2); mode = 0;
+  }
+
+  predictor.predMode = mode + aps.direct_avg_predictor_disabled_flag;
+}
+
+//============================================================================
 } /* namespace pcc */
