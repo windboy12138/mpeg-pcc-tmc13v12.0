@@ -55,7 +55,7 @@ static int pointUseRdoNotZeroCountRefl = 0;
 
 // todo(df): promote to per-attribute encoder parameter
 static const double kAttrPredLambdaR = 0.01;
-static const double kAttrPredLambdaC = 0.30; // only for lift
+static const double kAttrPredLambdaC =0.14; // only for lift
 
 namespace pcc {
 //============================================================================
@@ -904,7 +904,7 @@ AttributeEncoder::decidePredModeColorLift(
   Vec3<int64_t> attrResidualQuant =
     computeColorResidualsLift(aps, attrValue, attrPred, quantWeight, quantR);
   auto attrDistortion =
-    computeColorDistortions(desc, attrValue >> 8U, attrPred >> 8U, quantD);
+    computeColorDistortionsLift(desc, attrValue, attrPred, quantWeight, quantR);
 
   double rate = encoder.bitsPtColor(attrResidualQuant, 0);
   double best_score = attrDistortion
@@ -919,7 +919,7 @@ AttributeEncoder::decidePredModeColorLift(
     attrResidualQuant =
       computeColorResidualsLift(aps, attrValue, attrPred, quantWeight, quantR);
     attrDistortion =
-      computeColorDistortions(desc, attrValue >> 8U, attrPred >> 8U, quantD);
+      computeColorDistortionsLift(desc, attrValue, attrPred, quantWeight, quantR);
 
     int sigIdx = i + !aps.direct_avg_predictor_disabled_flag;
     double rate = encoder.bitsPtColor(attrResidualQuant, sigIdx);
@@ -1655,6 +1655,40 @@ AttributeEncoder::computeColorDistortions(
   int distortion = 0;
   for (int k = 0; k < 3; ++k)
     distortion += std::abs(color[k] - reconstructedColor[k]);
+
+  return distortion;
+}
+
+//============================================================================
+
+int
+AttributeEncoder::computeColorDistortionsLift(
+  const AttributeDescription& desc,
+  const Vec3<attr_t> color,
+  const Vec3<attr_t> predictedColor,
+  uint64_t weight,
+  const Quantizers& quant)
+{
+  int64_t clipMax = (1 << desc.bitdepth) - 1;
+  const int64_t iQuantWeight = irsqrt(weight);
+  const int64_t quantWeight = (weight * iQuantWeight + (1ull << 39)) >> 40;
+  Vec3<attr_t> reconstructedColor;
+  for (int k = 0; k < 3; ++k) {
+    const auto& q = quant[std::min(k, 1)];
+    int64_t residual = color[k] - predictedColor[k];
+
+    int64_t residualQ = q.quantize(residual * quantWeight);
+    int64_t scaled = q.scale(residualQ);
+    int64_t residualR =
+      divExp2RoundHalfUp(scaled * iQuantWeight, 40);
+
+    int64_t recon = predictedColor[k] + residualR;
+    reconstructedColor[k] = attr_t(PCCClip(recon >> 8, int64_t(0), clipMax));
+  }
+
+  int distortion = 0;
+  for (int k = 0; k < 3; ++k)
+    distortion += std::abs( (color[k] >> 8) - reconstructedColor[k]);
 
   return distortion;
 }

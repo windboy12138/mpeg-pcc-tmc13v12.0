@@ -135,6 +135,13 @@ protected:
     const Vec3<attr_t> predictedColor,
     const Quantizers& quant);
 
+  int computeColorDistortionsLift(
+    const AttributeDescription& desc,
+    const Vec3<attr_t> color,
+    const Vec3<attr_t> predictedColor,
+    uint64_t weight,
+    const Quantizers& quant);
+
   static void decidePredModeColor(
     const AttributeDescription& desc,
     const AttributeParameterSet& aps,
