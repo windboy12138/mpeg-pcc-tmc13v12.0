@@ -729,7 +729,7 @@ AttributeEncoder::encodeReflectancesPred(
   if (zeroRunAcc)
     zerorun.push_back(zeroRunAcc);
 
-#if Use_position_centroid_Diff
+#if 1
   std::cout << '\n'<< "********************************************************"<< std::endl;
   std::cout << "Refl:  Total point use rdo:  " << pointUseRdoCountRefl << '\n'
             << "Refl:  Total point not average predMode:  " << pointUseRdoNotZeroCountRefl<< '\n'
@@ -737,6 +737,7 @@ AttributeEncoder::encodeReflectancesPred(
             << std::endl;  //wxh add for test
   std::cout << "********************************************************"<< '\n'<< std::endl;
 #endif
+
   int runIdx = 0;
   int zeroRunRem = 0;
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
@@ -1074,7 +1075,8 @@ AttributeEncoder::encodeColorsPred(
   }
   if (zeroRunAcc)
     zerorun.push_back(zeroRunAcc);
-#if Use_position_centroid_Diff
+
+#if 1
   std::cout << '\n'<< "********************************************************"<< std::endl;
   std::cout << "Total point use rdo:  " << pointUseRdoCount << '\n'
             << "Total point not average predMode:  " << pointUseRdoNotZeroCount<< '\n'
@@ -1082,6 +1084,7 @@ AttributeEncoder::encodeColorsPred(
             << std::endl;
   std::cout << "********************************************************"<< '\n'<< std::endl;
 #endif
+
   int runIdx = 0;
   int zeroRunRem = 0;
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
