@@ -584,7 +584,10 @@ AttributeEncoder::decidePredModeRefl(
   // NB: idxBits is not included in the score
   int mode = predictor.predMode - aps.direct_avg_predictor_disabled_flag;
   int64_t best_score = encoder.bitsPtRefl(attrResidualQuant, mode);
-
+  if (predictorIndex < 100) {
+    std::cout << "the predMode and it's score:    " << mode + 1 << "    "
+              << best_score << "    " << std::endl;
+  }
   for (int i = startpredIndex; i < predictor.neighborCount; i++) {
     if (i == aps.max_num_direct_predictors)
       break;
@@ -595,6 +598,10 @@ AttributeEncoder::decidePredModeRefl(
 
     mode = i + !aps.direct_avg_predictor_disabled_flag;
     int64_t score = encoder.bitsPtRefl(attrResidualQuant, mode);
+    if (predictorIndex < 100) {
+      std::cout << "the predMode and it's score:    " << mode + 1 << "    "
+                << score << "    " << std::endl;
+    }
     if (score < best_score) {
       best_score = score;
       predictor.predMode = i + 1;
@@ -663,6 +670,11 @@ AttributeEncoder::encodeReflectancesPred(
 
     bool predModeEligible =
       predModeEligibleRefl(desc, aps, pointCloud, _lods.indexes, predictor);
+    if (predictorIndex < 100) {
+      std::cout << "the default predMode:  " << (int64_t)predictor.predMode
+                << std::endl;
+      std::cout << "RDO function enabled:  " << predModeEligible << std::endl;
+    }
     if (predModeEligible)
       decidePredModeRefl(
         desc, aps, pointCloud, _lods.indexes, predictorIndex, predictor,
@@ -686,6 +698,18 @@ AttributeEncoder::encodeReflectancesPred(
       quantPredAttValue + reconstructedDelta;
     const attr_t reconstructedReflectance =
       attr_t(PCCClip(reconstructedQuantAttValue, int64_t(0), clipMax));
+    //=====================================
+    if (predictorIndex < 100) {
+      std::cout << "the neighbor predictor index is:  ";
+      for (int i = 0; i < predictor.neighborCount; i++)
+        std::cout << predictor.neighbors[i].predictorIndex << "    ";
+      std::cout << std::endl;
+    }
+    std::cout << "predictorIndex: \t" << predictorIndex
+              << "\t the predMode: \t" << (int64_t)predictor.predMode
+              << "\t the original Refl value:\t" << reflectance
+              << "\t the reconstructed Refl value:\t"
+              << reconstructedReflectance << std::endl;
 
     if (!attValue0)
       ++zeroRunAcc;
@@ -952,7 +976,14 @@ AttributeEncoder::encodeColorsPred(
   for (int i = 0; i < 3; i++) {
     residual[i].resize(pointCount);
   }
-
+  //================================
+  bool No_QP_flag = false;
+  int lod_flag = 0;
+  int u = 0;
+  int a = 24;
+  int a_temp = a;
+  int t;
+  //================================
   bool icpPresent = _abh->icpPresent(desc, aps);
   if (icpPresent)
     _abh->icpCoeffs = computeInterComponentPredictionCoeffs(aps, pointCloud);
@@ -962,6 +993,18 @@ AttributeEncoder::encodeColorsPred(
   int quantLayer = 0;
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
        ++predictorIndex) {
+    //=============
+    int m = pointCount / a;
+    for (int i = 0; i < a;) {
+      if (predictorIndex == i * m) {
+        No_QP_flag = true;
+        i = a;
+      } else {
+        No_QP_flag = false;
+        i++;
+      }
+    }
+    //=============
     if (predictorIndex == _lods.numPointsInLod[quantLayer]) {
       quantLayer = std::min(int(qpSet.layers.size()) - 1, quantLayer + 1);
     }
@@ -1004,10 +1047,18 @@ AttributeEncoder::encodeColorsPred(
       if (k == 0)
         residual0 = residualR;
 
-      values[k] = residualQ;
+      if (false) {
+        values[k] = color[k] - predictedColor[k];
+        reconstructedColor[k] = color[k];
+      } else {
+        values[k] = residualQ;
+        int64_t recon = predictedColor[k] + residualR;
+        reconstructedColor[k] = attr_t(PCCClip(recon, int64_t(0), clipMax));
+      }
+      //values[k] = residualQ;
 
-      int64_t recon = predictedColor[k] + residualR;
-      reconstructedColor[k] = attr_t(PCCClip(recon, int64_t(0), clipMax));
+      //int64_t recon = predictedColor[k] + residualR;
+      //reconstructedColor[k] = attr_t(PCCClip(recon, int64_t(0), clipMax));
     }
 
     if (predModeEligible)
