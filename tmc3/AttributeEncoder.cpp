@@ -654,7 +654,7 @@ AttributeEncoder::encodeReflectancesPred(
   int quantLayer = 0;
 #if Adaptive_Quant_for_point
   std::vector<int64_t> quantizationWeights;
-  ComputePointQuantizationWeights(_lods.predictors, quantizationWeights, aps.weightOfNearestNeighborsInAdaptiveQuant);
+  ComputePointQuantizationWeights(_lods.predictors, quantizationWeights, aps.impactFactorOfNearestNeighborsInAdaptiveQuant);
   //for (size_t i = 0; i < pointCount; ++i) {
   //  const size_t predictorIndex = i;
   //  const auto QuantWeight = quantizationWeights[predictorIndex] >> kFixedPointWeightShift;
@@ -984,7 +984,7 @@ AttributeEncoder::encodeColorsPred(
   int quantLayer = 0;
 #if Adaptive_Quant_for_point
   std::vector<int64_t> quantizationWeights;
-  ComputePointQuantizationWeights(_lods.predictors, quantizationWeights, aps.weightOfNearestNeighborsInAdaptiveQuant);
+  ComputePointQuantizationWeights(_lods.predictors, quantizationWeights, aps.impactFactorOfNearestNeighborsInAdaptiveQuant);
 #endif
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
        ++predictorIndex) {

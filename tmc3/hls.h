@@ -602,7 +602,7 @@ struct AttributeParameterSet {
   int intra_lod_search_range;
   int inter_lod_search_range;
 #if Enable_user_define_weight_of_nearest_neighbor
-  Vec3<int32_t> weightOfNearestNeighborsInAdaptiveQuant;
+  Vec3<int32_t> impactFactorOfNearestNeighborsInAdaptiveQuant;
 #endif
   int adaptivePredictionThreshold(const AttributeDescription& desc) const
   {

@@ -816,11 +816,6 @@ write(const SequenceParameterSet& sps, const AttributeParameterSet& aps)
 
   bs.writeUe(aps.init_qp_minus4);
   bs.writeSe(aps.aps_chroma_qp_offset);
-#if Enable_user_define_weight_of_nearest_neighbor
-  bs.writeUe(aps.weightOfNearestNeighborsInAdaptiveQuant[0]);
-  bs.writeUe(aps.weightOfNearestNeighborsInAdaptiveQuant[1]);
-  bs.writeUe(aps.weightOfNearestNeighborsInAdaptiveQuant[2]);
-#endif
   bs.write(aps.aps_slice_qp_deltas_present_flag);
 
   if (aps.lodParametersPresent()) {
@@ -867,6 +862,9 @@ write(const SequenceParameterSet& sps, const AttributeParameterSet& aps)
       bs.writeUn(8, aps.adaptive_prediction_threshold);
       bs.write(aps.direct_avg_predictor_disabled_flag);
     }
+    for (int idx = 0; idx < aps.max_num_direct_predictors; idx++) {
+      bs.writeUe(aps.impactFactorOfNearestNeighborsInAdaptiveQuant[idx]);
+    } // place this para into PT area can save bitstream size while using other transform type
     bs.writeUe(aps.intra_lod_prediction_skip_layers);
     bs.write(aps.inter_component_prediction_enabled_flag);
     bs.write(aps.pred_weight_blending_enabled_flag);
@@ -911,11 +909,6 @@ parseAps(const PayloadBuffer& buf)
 
   bs.readUe(&aps.init_qp_minus4);
   bs.readSe(&aps.aps_chroma_qp_offset);
-#if Enable_user_define_weight_of_nearest_neighbor
-  bs.readUe(&aps.weightOfNearestNeighborsInAdaptiveQuant[0]);
-  bs.readUe(&aps.weightOfNearestNeighborsInAdaptiveQuant[1]);
-  bs.readUe(&aps.weightOfNearestNeighborsInAdaptiveQuant[2]);
-#endif
   bs.read(&aps.aps_slice_qp_deltas_present_flag);
 
   aps.aps_slice_dist2_deltas_present_flag = false;
@@ -971,6 +964,9 @@ parseAps(const PayloadBuffer& buf)
       bs.readUn(8, &aps.adaptive_prediction_threshold);
       bs.read(&aps.direct_avg_predictor_disabled_flag);
     }
+    for (int idx = 0; idx < aps.max_num_direct_predictors; idx++) {
+      bs.readUe(&aps.impactFactorOfNearestNeighborsInAdaptiveQuant[idx]);
+    } // should place this after decode read the para max_num_direct_predictors; the decode order should according to encode order
     bs.readUe(&aps.intra_lod_prediction_skip_layers);
     bs.read(&aps.inter_component_prediction_enabled_flag);
     bs.read(&aps.pred_weight_blending_enabled_flag);

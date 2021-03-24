@@ -975,9 +975,9 @@ ParseParameters(int argc, char* argv[], Parameters& params)
     "Attribute's chroma quantisation parameter offset (relative to luma)")
 
 #if Enable_user_define_weight_of_nearest_neighbor
-  ("weightOfNearestNeighborsInAdaptiveQuant",
-    params_attr.aps.weightOfNearestNeighborsInAdaptiveQuant, {32,16,8},
-      "Weight of Nearest Neighbors in Adaptive quantization for point")
+  ("impactFactorOfNearestNeighborsInAdaptiveQuant",
+    params_attr.aps.impactFactorOfNearestNeighborsInAdaptiveQuant, {32,16,8},
+      "impact Factor of Nearest Neighbors in Adaptive quantization for point")
 #endif
 
   ("aps_slice_qp_deltas_present_flag",
