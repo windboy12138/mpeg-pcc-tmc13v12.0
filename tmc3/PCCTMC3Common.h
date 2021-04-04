@@ -36,7 +36,6 @@
 #ifndef PCCTMC3Common_h
 #define PCCTMC3Common_h
 
-#define Adaptive_Quant_for_point 1
 #include "PCCMath.h"
 #include "PCCPointSet.h"
 #include "constants.h"
@@ -1820,7 +1819,6 @@ buildPredictorsFast(
 
 //---------------------------------------------------------------------------
 
-#if Adaptive_Quant_for_point
 inline void
 ComputePointQuantizationWeights(
   const std::vector<PCCPredictor>& predictors,
@@ -1846,7 +1844,6 @@ ComputePointQuantizationWeights(
     }
   }
 }
-#endif
 
 //---------------------------------------------------------------------------
 

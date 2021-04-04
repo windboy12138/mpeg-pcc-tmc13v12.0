@@ -652,18 +652,10 @@ AttributeEncoder::encodeReflectancesPred(
   residual.resize(pointCount);
 
   int quantLayer = 0;
-#if Adaptive_Quant_for_point
+
   std::vector<int64_t> quantizationWeights;
   ComputePointQuantizationWeights(_lods.predictors, quantizationWeights, aps.impactFactorOfNearestNeighborsInAdaptiveQuant);
-  //for (size_t i = 0; i < pointCount; ++i) {
-  //  const size_t predictorIndex = i;
-  //  const auto QuantWeight = quantizationWeights[predictorIndex] >> kFixedPointWeightShift;
-  //  std::cout << "The predictor index:  " << predictorIndex
-  //            << "\t the QuantWeight:  " << QuantWeight
-  //            << "\t the square root QuantWeight:  "
-  //            << uint64_t(std::sqrt(QuantWeight)) << std::endl;
-  //}
-#endif
+
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
        ++predictorIndex) {
     if (predictorIndex == _lods.numPointsInLod[quantLayer]) {
@@ -685,7 +677,7 @@ AttributeEncoder::encodeReflectancesPred(
       predictor.predictReflectance(pointCloud, _lods.indexes);
     const int64_t quantAttValue = reflectance;
     const int64_t quantPredAttValue = predictedReflectance;
-#if Adaptive_Quant_for_point
+
     int64_t Qstep = quant[0].stepSize();
     int64_t weight = std::min(quantizationWeights[predictorIndex], Qstep) >> kFixedPointWeightShift;
     const int64_t delta = quant[0].quantize(
@@ -694,13 +686,7 @@ AttributeEncoder::encodeReflectancesPred(
     int64_t reconstructedDelta =
       divExp2RoundHalfUp(quant[0].scale(delta), kFixedPointAttributeShift);
     reconstructedDelta /= weight;
-#else
-    const int64_t delta = quant[0].quantize(
-      (quantAttValue - quantPredAttValue) << kFixedPointAttributeShift);
-    int32_t attValue0 = delta;
-    const int64_t reconstructedDelta =
-      divExp2RoundHalfUp(quant[0].scale(delta), kFixedPointAttributeShift);
-#endif
+
     if (predModeEligible)
       encodePredModeRefl(aps, predictor.predMode, attValue0);
 
@@ -982,10 +968,10 @@ AttributeEncoder::encodeColorsPred(
 
   int lod = 0;
   int quantLayer = 0;
-#if Adaptive_Quant_for_point
+
   std::vector<int64_t> quantizationWeights;
   ComputePointQuantizationWeights(_lods.predictors, quantizationWeights, aps.impactFactorOfNearestNeighborsInAdaptiveQuant);
-#endif
+
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
        ++predictorIndex) {
     if (predictorIndex == _lods.numPointsInLod[quantLayer]) {
@@ -1015,7 +1001,7 @@ AttributeEncoder::encodeColorsPred(
     for (int k = 0; k < 3; ++k) {
       const auto& q = quant[std::min(k, 1)];
       int64_t residual = color[k] - predictedColor[k];
-#if Adaptive_Quant_for_point
+
       int64_t Qstep = q.stepSize();
 	  int64_t weight = std::min(quantizationWeights[predictorIndex], Qstep) >> kFixedPointWeightShift;
       int64_t residualQ = q.quantize((residual * weight) << kFixedPointAttributeShift);
@@ -1032,18 +1018,7 @@ AttributeEncoder::encodeColorsPred(
 		residualR += ((icpCoeff[k] * residual0 + 2) >> 2);
         
       }
-#else
-      int64_t residualQ = q.quantize(residual << kFixedPointAttributeShift);
-      int64_t residualR =
-        divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
 
-      if (aps.inter_component_prediction_enabled_flag && k > 0) {
-        residual = residual - ((icpCoeff[k] * residual0 + 2) >> 2);
-        residualQ = q.quantize(residual << kFixedPointAttributeShift);
-        residualR = ((icpCoeff[k] * residual0 + 2) >> 2)
-          + divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
-      }
-#endif
       if (k == 0)
         residual0 = residualR;
 

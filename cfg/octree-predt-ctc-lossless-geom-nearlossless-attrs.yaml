@@ -84,6 +84,9 @@ categories:
            r03: 22
            r04: 28
            r05: 34
+           r06: 40
+           r07: 46
+           r08: 51
        - bitdepth: 8
        - attribute: reflectance
 
@@ -98,6 +101,9 @@ categories:
            r03: 22
            r04: 28
            r05: 34
+           r06: 40
+           r07: 46
+           r08: 51
        - qpChromaOffset: 0
        - bitdepth: 8
        - colourMatrix: 0

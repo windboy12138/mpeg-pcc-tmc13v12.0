@@ -39,7 +39,6 @@
 
 #include "PCCTMC3Encoder.h"
 #include "PCCTMC3Decoder.h"
-#include "PCCTMC3Common.h"  //adaptive_quant_for_point add;
 #include "constants.h"
 #include "ply.h"
 #include "pointset_processing.h"
@@ -974,11 +973,9 @@ ParseParameters(int argc, char* argv[], Parameters& params)
     params_attr.aps.aps_chroma_qp_offset, 0,
     "Attribute's chroma quantisation parameter offset (relative to luma)")
 
-#if Enable_user_define_weight_of_nearest_neighbor
   ("impactFactorOfNearestNeighborsInAdaptiveQuant",
     params_attr.aps.impactFactorOfNearestNeighborsInAdaptiveQuant, {32,16,8},
       "impact Factor of Nearest Neighbors in Adaptive quantization for point")
-#endif
 
   ("aps_slice_qp_deltas_present_flag",
     params_attr.aps.aps_slice_qp_deltas_present_flag, false,

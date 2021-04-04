@@ -864,7 +864,7 @@ write(const SequenceParameterSet& sps, const AttributeParameterSet& aps)
     }
     for (int idx = 0; idx < aps.max_num_direct_predictors; idx++) {
       bs.writeUe(aps.impactFactorOfNearestNeighborsInAdaptiveQuant[idx]);
-    } // place this para into PT area can save bitstream size while using other transform type
+    }
     bs.writeUe(aps.intra_lod_prediction_skip_layers);
     bs.write(aps.inter_component_prediction_enabled_flag);
     bs.write(aps.pred_weight_blending_enabled_flag);
