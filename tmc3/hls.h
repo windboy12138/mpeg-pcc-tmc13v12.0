@@ -600,7 +600,7 @@ struct AttributeParameterSet {
   int adaptive_prediction_threshold;
   int intra_lod_search_range;
   int inter_lod_search_range;
-  Vec3<int32_t> impactFactorOfNearestNeighborsInAdaptiveQuant;
+  Vec3<uint32_t> impactFactorOfNearestNeighborsInAdaptiveQuant;
 
   int adaptivePredictionThreshold(const AttributeDescription& desc) const
   {
