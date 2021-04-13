@@ -973,6 +973,10 @@ ParseParameters(int argc, char* argv[], Parameters& params)
     params_attr.aps.aps_chroma_qp_offset, 0,
     "Attribute's chroma quantisation parameter offset (relative to luma)")
 
+  ("impactFactorOfNearestNeighborsInAdaptiveQuant",
+    params_attr.aps.impactFactorOfNearestNeighborsInAdaptiveQuant, {32,16,8},
+      "impact Factor of Nearest Neighbors in Adaptive quantization for point")
+
   ("aps_slice_qp_deltas_present_flag",
     params_attr.aps.aps_slice_qp_deltas_present_flag, false,
     "Enable signalling of per-slice QP values")

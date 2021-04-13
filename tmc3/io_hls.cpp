@@ -862,6 +862,9 @@ write(const SequenceParameterSet& sps, const AttributeParameterSet& aps)
       bs.writeUn(8, aps.adaptive_prediction_threshold);
       bs.write(aps.direct_avg_predictor_disabled_flag);
     }
+    for (int idx = 0; idx < aps.max_num_direct_predictors; idx++) {
+      bs.writeUe(aps.impactFactorOfNearestNeighborsInAdaptiveQuant[idx]);
+    }
     bs.writeUe(aps.intra_lod_prediction_skip_layers);
     bs.write(aps.inter_component_prediction_enabled_flag);
     bs.write(aps.pred_weight_blending_enabled_flag);
@@ -960,6 +963,9 @@ parseAps(const PayloadBuffer& buf)
     if (aps.max_num_direct_predictors) {
       bs.readUn(8, &aps.adaptive_prediction_threshold);
       bs.read(&aps.direct_avg_predictor_disabled_flag);
+    }
+    for (int idx = 0; idx < aps.max_num_direct_predictors; idx++) {
+      bs.readUe(&aps.impactFactorOfNearestNeighborsInAdaptiveQuant[idx]);
     }
     bs.readUe(&aps.intra_lod_prediction_skip_layers);
     bs.read(&aps.inter_component_prediction_enabled_flag);
