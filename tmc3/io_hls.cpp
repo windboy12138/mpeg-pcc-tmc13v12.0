@@ -966,7 +966,7 @@ parseAps(const PayloadBuffer& buf)
     }
     for (int idx = 0; idx < aps.max_num_direct_predictors; idx++) {
       bs.readUe(&aps.impactFactorOfNearestNeighborsInAdaptiveQuant[idx]);
-    } // should place this after decode read the para max_num_direct_predictors; the decode order should according to encode order
+    }
     bs.readUe(&aps.intra_lod_prediction_skip_layers);
     bs.read(&aps.inter_component_prediction_enabled_flag);
     bs.read(&aps.pred_weight_blending_enabled_flag);
