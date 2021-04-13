@@ -316,7 +316,29 @@ AttributeDecoder::decodeReflectancesPred(
 {
   const size_t pointCount = pointCloud.getPointCount();
   const int64_t maxReflectance = (1ll << desc.bitdepth) - 1;
+ 
+  bool unquantized_flag, lod_flag = false;
+  uint32_t start_lodlayer, less_unquantized_lodlayer = 0;
+  uint32_t intermittent_unquantized_num = aps.intermittent_unquantized_num;
+  uint32_t intermittent_unquantized_num_temp = intermittent_unquantized_num;
 
+  if (size(_lods.numPointsInLod) > 1) {
+    lod_flag = true;
+  }
+  if (lod_flag) {
+    for (int n = 5; n > 0;) {
+      if (_lods.numPointsInLod[n] - _lods.numPointsInLod[n - 1]
+        < intermittent_unquantized_num) {
+        start_lodlayer = n;
+        n = 0;
+      } else {
+        n--;
+      }
+    }
+
+    less_unquantized_lodlayer = start_lodlayer;
+  }
+ 
   int zeroRunRem = 0;
   int quantLayer = 0;
   for (size_t predictorIndex = 0; predictorIndex < pointCount;
@@ -327,7 +349,47 @@ AttributeDecoder::decodeReflectancesPred(
     const uint32_t pointIndex = _lods.indexes[predictorIndex];
     auto quant = qpSet.quantizers(pointCloud[pointIndex], quantLayer);
     auto& predictor = _lods.predictors[predictorIndex];
+    
+    if (lod_flag) {
+      int m = (_lods.numPointsInLod[start_lodlayer + 1] - _lods.numPointsInLod[start_lodlayer])
+        / intermittent_unquantized_num;
+      if (predictorIndex >= _lods.numPointsInLod[6]) {
+        intermittent_unquantized_num = intermittent_unquantized_num_temp / 3;
+        m = (_lods.numPointsInLod[start_lodlayer + 1]
+             - _lods.numPointsInLod[start_lodlayer])
+          / intermittent_unquantized_num;
+      }
 
+      if (predictorIndex < _lods.numPointsInLod[less_unquantized_lodlayer]) {
+        unquantized_flag = true;
+      }
+      if (predictorIndex >= _lods.numPointsInLod[less_unquantized_lodlayer]) {
+        for (int i = 0; i < intermittent_unquantized_num;) {
+          if (predictorIndex == _lods.numPointsInLod[start_lodlayer] + i * m) {
+            unquantized_flag = true;
+            i = intermittent_unquantized_num;
+          } else {
+            unquantized_flag = false;
+            i++;
+          }
+        }
+      }
+      if (predictorIndex == _lods.numPointsInLod[start_lodlayer + 1] - 1) {
+        start_lodlayer++;
+      }
+    } else {
+      int m = pointCount / intermittent_unquantized_num;
+      for (int i = 0; i < intermittent_unquantized_num;) {
+        if (predictorIndex == i * m) {
+          unquantized_flag = true;
+          i = intermittent_unquantized_num;
+        } else {
+          unquantized_flag = false;
+          i++;
+        }
+      }
+    }
+   
     if (--zeroRunRem < 0)
       zeroRunRem = decoder.decodeRunLength();
 
@@ -343,7 +405,10 @@ AttributeDecoder::decodeReflectancesPred(
       predictor.predictReflectance(pointCloud, _lods.indexes);
     const int64_t delta =
       divExp2RoundHalfUp(quant[0].scale(attValue0), kFixedPointAttributeShift);
-    const int64_t reconstructedQuantAttValue = quantPredAttValue + delta;
+     int64_t reconstructedQuantAttValue = quantPredAttValue + delta;
+    if (unquantized_flag ) {
+      reconstructedQuantAttValue = quantPredAttValue + attValue0;
+    }
     reflectance =
       attr_t(PCCClip(reconstructedQuantAttValue, int64_t(0), maxReflectance));
   }
@@ -415,6 +480,28 @@ AttributeDecoder::decodeColorsPred(
   int64_t clipMax = (1 << desc.bitdepth) - 1;
   Vec3<int32_t> values;
 
+  bool unquantized_flag, lod_flag = false;
+  uint32_t start_lodlayer, less_unquantized_lodlayer = 0;
+  uint32_t intermittent_unquantized_num = aps.intermittent_unquantized_num;
+  uint32_t intermittent_unquantized_num_temp = intermittent_unquantized_num;
+
+  if (size(_lods.numPointsInLod) > 1) {
+    lod_flag = true;
+  }
+  if (lod_flag) {
+    for (int n = 5; n > 0;) {
+      if (_lods.numPointsInLod[n] - _lods.numPointsInLod[n - 1]
+        < intermittent_unquantized_num) {
+        start_lodlayer = n;
+        n = 0;
+      } else {
+        n--;
+      }
+    }
+
+    less_unquantized_lodlayer = start_lodlayer;
+  }
+ 
   bool icpPresent = abh.icpPresent(desc, aps);
   auto icpCoeff = icpPresent ? abh.icpCoeffs[0] : 0;
 
@@ -430,6 +517,45 @@ AttributeDecoder::decodeColorsPred(
     auto quant = qpSet.quantizers(pointCloud[pointIndex], quantLayer);
     auto& predictor = _lods.predictors[predictorIndex];
 
+    if (lod_flag) {
+      int m = (_lods.numPointsInLod[start_lodlayer + 1]- _lods.numPointsInLod[start_lodlayer])
+        / intermittent_unquantized_num;
+      if (predictorIndex >= _lods.numPointsInLod[6]) {
+        intermittent_unquantized_num = intermittent_unquantized_num_temp / 3;
+        m = (_lods.numPointsInLod[start_lodlayer + 1]
+             - _lods.numPointsInLod[start_lodlayer])
+          / intermittent_unquantized_num;
+      }
+
+      if (predictorIndex < _lods.numPointsInLod[less_unquantized_lodlayer]) {
+        unquantized_flag = true;
+      }
+      if (predictorIndex >= _lods.numPointsInLod[less_unquantized_lodlayer]) {
+        for (int i = 0; i < intermittent_unquantized_num;) {
+          if (predictorIndex == _lods.numPointsInLod[start_lodlayer] + i * m) {
+            unquantized_flag = true;
+            i = intermittent_unquantized_num;
+          } else {
+            unquantized_flag = false;
+            i++;
+          }
+        }
+      }
+      if (predictorIndex == _lods.numPointsInLod[start_lodlayer + 1] - 1) {
+        start_lodlayer++;
+      }
+    } else {
+      int m = pointCount / intermittent_unquantized_num;
+      for (int i = 0; i < intermittent_unquantized_num;) {
+        if (predictorIndex == i * m) {
+          unquantized_flag = true;
+          i = intermittent_unquantized_num;
+        } else {
+          unquantized_flag = false;
+          i++;
+        }
+      }
+    }
     if (--zeroRunRem < 0)
       zeroRunRem = decoder.decodeRunLength();
 
@@ -450,13 +576,17 @@ AttributeDecoder::decodeColorsPred(
 
     int64_t residual0 = 0;
     for (int k = 0; k < 3; ++k) {
-      const auto& q = quant[std::min(k, 1)];
-      const int64_t residual =
-        divExp2RoundHalfUp(q.scale(values[k]), kFixedPointAttributeShift);
-
-      const int64_t recon =
-        predictedColor[k] + residual + ((icpCoeff[k] * residual0 + 2) >> 2);
-      color[k] = attr_t(PCCClip(recon, int64_t(0), clipMax));
+        const auto& q = quant[std::min(k, 1)];
+      int64_t residual =
+          divExp2RoundHalfUp(q.scale(values[k]), kFixedPointAttributeShift);
+        if (unquantized_flag) {
+          residual = values[k];
+          color[k] = predictedColor[k] + residual;
+        } else {
+          const int64_t recon = predictedColor[k] + residual
+            + ((icpCoeff[k] * residual0 + 2) >> 2);
+          color[k] = attr_t(PCCClip(recon, int64_t(0), clipMax));
+        }
 
       if (!k && aps.inter_component_prediction_enabled_flag)
         residual0 = residual;

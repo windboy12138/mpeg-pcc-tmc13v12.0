@@ -858,6 +858,7 @@ write(const SequenceParameterSet& sps, const AttributeParameterSet& aps)
 
   if (aps.attr_encoding == AttributeEncoding::kPredictingTransform) {
     bs.writeUe(aps.max_num_direct_predictors);
+    bs.writeUe(aps.intermittent_unquantized_num);
     if (aps.max_num_direct_predictors) {
       bs.writeUn(8, aps.adaptive_prediction_threshold);
       bs.write(aps.direct_avg_predictor_disabled_flag);
@@ -955,6 +956,7 @@ parseAps(const PayloadBuffer& buf)
   aps.intra_lod_prediction_skip_layers = aps.kSkipAllLayers;
   if (aps.attr_encoding == AttributeEncoding::kPredictingTransform) {
     bs.readUe(&aps.max_num_direct_predictors);
+    bs.readUe(&aps.intermittent_unquantized_num);
     aps.adaptive_prediction_threshold = 0;
     aps.direct_avg_predictor_disabled_flag = false;
     if (aps.max_num_direct_predictors) {

@@ -908,6 +908,10 @@ ParseParameters(int argc, char* argv[], Parameters& params)
     "Maximum number of nearest neighbour candidates used in direct"
     "attribute prediction")
 
+("intermittent_unquantized_num",
+    params_attr.aps.intermittent_unquantized_num, 32,
+    "Attribute's intermittent_unquantized_num parameter")
+
   ("direct_avg_predictor_disabled_flag",
     params_attr.aps.direct_avg_predictor_disabled_flag, false,
     "Disable average predictor")
