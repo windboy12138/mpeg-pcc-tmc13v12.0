@@ -942,6 +942,8 @@ AttributeEncoder::encodeColorsPred(
   PCCResidualsEncoder& encoder)
 {
   const size_t pointCount = pointCloud.getPointCount();
+  std::vector<uint64_t> weights;
+  PCCComputeQuantizationWeights(_lods.predictors, weights);
 
   int64_t clipMax = (1 << desc.bitdepth) - 1;
   Vec3<int32_t> values;
@@ -985,20 +987,35 @@ AttributeEncoder::encodeColorsPred(
       predictor.predictColor(pointCloud, _lods.indexes);
 
     Vec3<attr_t> reconstructedColor;
+    Vec3<int64_t> residualOriginal;
+    Vec3<int64_t> residualAQ;
     int64_t residual0 = 0;
+    const int64_t iQuantWeight = irsqrt(weights[predictorIndex]);
+    const int64_t quantWeight =
+      (weights[predictorIndex] * iQuantWeight + (1ull << 39)) >> 40;
+
     for (int k = 0; k < 3; ++k) {
       const auto& q = quant[std::min(k, 1)];
       int64_t residual = color[k] - predictedColor[k];
 
-      int64_t residualQ = q.quantize(residual << kFixedPointAttributeShift);
-      int64_t residualR =
-        divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
+      //int64_t residualQ = q.quantize(residual << kFixedPointAttributeShift);
+      //int64_t residualR =
+      //  divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
+      int64_t residualOri = q.quantize(residual << kFixedPointAttributeShift);
+      int64_t residualQ = q.quantize(residual * quantWeight);
+      int64_t scaled = q.scale(residualQ);
+      int64_t residualR = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
 
       if (aps.inter_component_prediction_enabled_flag && k > 0) {
         residual = residual - ((icpCoeff[k] * residual0 + 2) >> 2);
-        residualQ = q.quantize(residual << kFixedPointAttributeShift);
-        residualR = ((icpCoeff[k] * residual0 + 2) >> 2)
-          + divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
+        //residualQ = q.quantize(residual << kFixedPointAttributeShift);
+        //residualR = ((icpCoeff[k] * residual0 + 2) >> 2)
+        //  + divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
+        residualOri = q.quantize(residual << kFixedPointAttributeShift);
+        residualQ = q.quantize(residual * quantWeight);
+        scaled = q.scale(residualQ);
+        residualR = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
+        residualR = residualR + ((icpCoeff[k] * residual0 + 2) >> 2);
       }
 
       if (k == 0)
@@ -1008,7 +1025,18 @@ AttributeEncoder::encodeColorsPred(
 
       int64_t recon = predictedColor[k] + residualR;
       reconstructedColor[k] = attr_t(PCCClip(recon, int64_t(0), clipMax));
+      residualOriginal[k] = residualOri;
+      residualAQ[k] = residualQ;
     }
+    //std::cout << "the original color:  " << color
+    //          << "\t the recon color:  " << reconstructedColor << std::endl;
+    std::cout << "Index:  " << std::setw(7) <<predictorIndex
+              << "\t quant weight:  " << std::setw(6) << quantWeight
+              << "\t original residual:  " 
+			  << std::setw(4) << residualOriginal[0] 
+			  << std::setw(4) << residualOriginal[1]
+              << std::setw(4) << residualOriginal[2]
+              << "\t changed residual:  " << residualAQ << std::endl;
 
     if (predModeEligible)
       encodePredModeColor(aps, predictor.predMode, values);

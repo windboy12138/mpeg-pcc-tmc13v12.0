@@ -411,6 +411,8 @@ AttributeDecoder::decodeColorsPred(
   PCCPointSet3& pointCloud)
 {
   const size_t pointCount = pointCloud.getPointCount();
+  std::vector<uint64_t> weights;
+  PCCComputeQuantizationWeights(_lods.predictors, weights);
 
   int64_t clipMax = (1 << desc.bitdepth) - 1;
   Vec3<int32_t> values;
@@ -448,11 +450,16 @@ AttributeDecoder::decodeColorsPred(
     if (icpPresent && predictorIndex == _lods.numPointsInLod[lod])
       icpCoeff = abh.icpCoeffs[++lod];
 
+    const int64_t iQuantWeight = irsqrt(weights[predictorIndex]);
+    const int64_t quantWeight =
+      (weights[predictorIndex] * iQuantWeight + (1ull << 39)) >> 40;
     int64_t residual0 = 0;
     for (int k = 0; k < 3; ++k) {
       const auto& q = quant[std::min(k, 1)];
-      const int64_t residual =
-        divExp2RoundHalfUp(q.scale(values[k]), kFixedPointAttributeShift);
+      //const int64_t residual =
+      //  divExp2RoundHalfUp(q.scale(values[k]), kFixedPointAttributeShift);
+      int64_t scaled = q.scale(values[k]);
+      int64_t residual = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
 
       const int64_t recon =
         predictedColor[k] + residual + ((icpCoeff[k] * residual0 + 2) >> 2);
