@@ -1002,9 +1002,10 @@ AttributeEncoder::encodeColorsPred(
       //int64_t residualR =
       //  divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
       int64_t residualOri = q.quantize(residual << kFixedPointAttributeShift);
-      int64_t residualQ = q.quantize(residual * quantWeight);
+      int64_t residualQ = q.quantize((residual << kFixedPointAttributeShift) * quantWeight);
       int64_t scaled = q.scale(residualQ);
       int64_t residualR = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
+	  residualR = residualR >> kFixedPointAttributeShift;
 
       if (aps.inter_component_prediction_enabled_flag && k > 0) {
         residual = residual - ((icpCoeff[k] * residual0 + 2) >> 2);
@@ -1012,9 +1013,10 @@ AttributeEncoder::encodeColorsPred(
         //residualR = ((icpCoeff[k] * residual0 + 2) >> 2)
         //  + divExp2RoundHalfUp(q.scale(residualQ), kFixedPointAttributeShift);
         residualOri = q.quantize(residual << kFixedPointAttributeShift);
-        residualQ = q.quantize(residual * quantWeight);
+        residualQ = q.quantize((residual << kFixedPointAttributeShift) * quantWeight);
         scaled = q.scale(residualQ);
         residualR = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
+        residualR = residualR >> kFixedPointAttributeShift;
         residualR = residualR + ((icpCoeff[k] * residual0 + 2) >> 2);
       }
 

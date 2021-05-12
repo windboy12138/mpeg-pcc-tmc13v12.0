@@ -460,6 +460,7 @@ AttributeDecoder::decodeColorsPred(
       //  divExp2RoundHalfUp(q.scale(values[k]), kFixedPointAttributeShift);
       int64_t scaled = q.scale(values[k]);
       int64_t residual = divExp2RoundHalfInf(scaled * iQuantWeight, 40);
+      residual = residual >> kFixedPointAttributeShift;
 
       const int64_t recon =
         predictedColor[k] + residual + ((icpCoeff[k] * residual0 + 2) >> 2);
