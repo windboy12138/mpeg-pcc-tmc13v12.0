@@ -189,10 +189,12 @@ PCCTMC3Encoder3::compress(
   SrcMappedPointSet quantizedInput = quantization(inputPointCloud);
 
   // write out all parameter sets prior to encoding
-  callback->onOutputBuffer(write(*_sps));
-  callback->onOutputBuffer(write(*_sps, *_gps));
-  for (const auto aps : _aps) {
-    callback->onOutputBuffer(write(*_sps, *aps));
+  if (_frameCounter == 0) {
+    callback->onOutputBuffer(write(*_sps));
+    callback->onOutputBuffer(write(*_sps, *_gps));
+    for (const auto aps : _aps) {
+      callback->onOutputBuffer(write(*_sps, *aps));
+    }
   }
 
   std::vector<std::vector<int32_t>> tileMaps;
