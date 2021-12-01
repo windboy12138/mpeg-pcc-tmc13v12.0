@@ -148,6 +148,12 @@ protected:
     const uint64_t predictedReflectance,
     const Quantizer& quant);
 
+    static int computeReflDistortions(
+    const AttributeDescription& desc,
+    const uint64_t reflectance,
+    const uint64_t predictedReflectance,
+    const Quantizer& quant);
+
   static void decidePredModeRefl(
     const AttributeDescription& desc,
     const AttributeParameterSet& aps,

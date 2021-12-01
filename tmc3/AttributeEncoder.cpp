@@ -47,7 +47,7 @@
 #include <algorithm>
 
 // todo(df): promote to per-attribute encoder parameter
-static const double kAttrPredLambdaR = 0.01;
+static const double kAttrPredLambdaR = 0.55;
 static const double kAttrPredLambdaC = 0.14;
 
 namespace pcc {
@@ -557,6 +557,26 @@ AttributeEncoder::computeReflectanceResidual(
   return delta;
 }
 
+int
+AttributeEncoder::computeReflDistortions(
+  const AttributeDescription& desc,
+  const uint64_t reflectance,
+  const uint64_t predictedReflectance,
+  const Quantizer& quant)
+{
+  int64_t clipMax = (1 << desc.bitdepth) - 1;
+  const int64_t quantAttValue = reflectance;
+  const int64_t quantPredAttValue = predictedReflectance;
+  const int64_t residual = quantAttValue - quantPredAttValue;
+  const int64_t residualQ = quant.quantize(residual << kFixedPointAttributeShift);
+  const int64_t residualR =
+    divExp2RoundHalfUp(quant.scale(residualQ), kFixedPointAttributeShift);
+  const int64_t reconstructedQuantAttValue = quantPredAttValue + residualR;
+  const attr_t reconstructedReflectance = attr_t(PCCClip(reconstructedQuantAttValue, int64_t(0), clipMax));
+  int distortion = std::abs(quantAttValue - reconstructedReflectance);
+  return distortion * distortion;
+}
+
 //----------------------------------------------------------------------------
 
 void
@@ -580,10 +600,14 @@ AttributeEncoder::decidePredModeRefl(
   uint64_t attrPred = predictor.predictReflectance(pointCloud, indexesLOD);
   int64_t attrResidualQuant =
     computeReflectanceResidual(attrValue, attrPred, quant);
+  int distortion = computeReflDistortions(desc, attrValue, attrPred, quant);
 
   // NB: idxBits is not included in the score
   int mode = predictor.predMode - aps.direct_avg_predictor_disabled_flag;
-  int64_t best_score = encoder.bitsPtRefl(attrResidualQuant, mode);
+  double Rate = encoder.bitsPtRefl(attrResidualQuant, mode);
+  int Qstep = quant.stepSize() >> kFixedPointAttributeShift;
+  double best_score = distortion + kAttrPredLambdaR * Qstep * Qstep * Rate;
+  // int64_t best_score = encoder.bitsPtRefl(attrResidualQuant, mode);
 
   for (int i = startpredIndex; i < predictor.neighborCount; i++) {
     if (i == aps.max_num_direct_predictors)
@@ -592,9 +616,11 @@ AttributeEncoder::decidePredModeRefl(
     attrPred = pointCloud.getReflectance(
       indexesLOD[predictor.neighbors[i].predictorIndex]);
     attrResidualQuant = computeReflectanceResidual(attrValue, attrPred, quant);
-
+    distortion = computeReflDistortions(desc, attrValue, attrPred, quant);
     mode = i + !aps.direct_avg_predictor_disabled_flag;
-    int64_t score = encoder.bitsPtRefl(attrResidualQuant, mode);
+    Rate = encoder.bitsPtRefl(attrResidualQuant, mode);
+    double score = distortion + kAttrPredLambdaR * Qstep * Qstep * Rate;
+
     if (score < best_score) {
       best_score = score;
       predictor.predMode = i + 1;
